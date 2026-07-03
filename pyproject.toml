@@ -1,0 +1,33 @@
+[project]
+name = "infra-sentinel"
+version = "1.0.0"
+description = "LLM-in-the-loop infrastructure watchdog: polls Zabbix + Prometheus and, only on new events, asks a self-hosted LLM to reason and alert."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Marcelo Semino" }]
+dependencies = []  # runtime is pure standard library on purpose
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.scripts]
+sentinel = "sentinel.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["sentinel*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+ignore = ["S101"]  # asserts are fine in tests
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S", "E501"]
+"mocks/*" = ["S"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

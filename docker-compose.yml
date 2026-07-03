@@ -1,0 +1,64 @@
+services:
+  mock-zabbix:
+    build: .
+    command: python -m mocks.mock_server
+    environment:
+      MOCK_ROLE: zabbix
+      MOCK_PORT: "8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  mock-prometheus:
+    build: .
+    command: python -m mocks.mock_server
+    environment:
+      MOCK_ROLE: prometheus
+      MOCK_PORT: "8080"
+
+  mock-ollama:
+    build: .
+    command: python -m mocks.mock_server
+    environment:
+      MOCK_ROLE: ollama
+      MOCK_PORT: "8080"
+
+  sentinel:
+    build: .
+    depends_on:
+      mock-zabbix:
+        condition: service_healthy
+      mock-prometheus:
+        condition: service_started
+      mock-ollama:
+        condition: service_started
+    environment:
+      ZABBIX_URL: http://mock-zabbix:8080/api_jsonrpc.php
+      ZABBIX_USER: monitor
+      ZABBIX_PASS: monitor
+      ZABBIX_MIN_SEVERITY: "4"
+      PROMETHEUS_URL: http://mock-prometheus:8080
+      OLLAMA_URL: http://mock-ollama:8080
+      OLLAMA_MODEL: qwen2.5:14b
+      OLLAMA_TIMEOUT: "60"
+      NOTIFIER: inbox
+      INBOX_PATH: /data/inbox.jsonl
+      DEDUP_COOLDOWN_SEC: "60"
+      MASS_OUTAGE_THRESHOLD: "8"
+      STATE_FILE: /data/state.json
+      CYCLE_INTERVAL_SEC: "10"
+    volumes:
+      - ./data:/data
+    # Loop the one-shot cycle so the demo is self-driving. In production you'd use
+    # the systemd timer in docs/ instead (one process per cycle, no long-lived loop).
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        echo "[sentinel] demo loop every ${CYCLE_INTERVAL_SEC}s (Ctrl-C to stop)";
+        while true; do
+          python -m sentinel.cli || true;
+          sleep "${CYCLE_INTERVAL_SEC}";
+        done

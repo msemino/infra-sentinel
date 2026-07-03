@@ -1,0 +1,12 @@
+{
+  "_comment": "Canned but coherent Ollama /api/chat reply, shaped like a real one.",
+  "model": "qwen2.5:14b",
+  "created_at": "2026-01-01T00:00:00Z",
+  "message": {
+    "role": "assistant",
+    "content": "<b>New:</b> <code>switch-access-07</code> reports <code>Gi1/0/24</code> link down (High).\nLikely impact: the devices behind that access port lost connectivity; if it feeds an AP or a phone bank, expect partial WiFi/telephony degradation on that segment. Scope is limited — no core or uplink alarm alongside it.\n<b>First look:</b> check whether Gi1/0/24 is an uplink or an edge port and confirm the peer device is powered; if it is PoE, verify the power budget on <code>switch-access-07</code>."
+  },
+  "done": true,
+  "done_reason": "stop",
+  "total_duration": 31000000000
+}
