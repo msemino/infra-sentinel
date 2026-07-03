@@ -1,0 +1,21 @@
+{
+  "_comment": "Synthetic Zabbix problems used by the mock. All hosts/IPs are fictional.",
+  "problems": [
+    {
+      "eventid": "800001",
+      "name": "High input traffic on Gi1/0/1 (>90%)",
+      "severity": "4",
+      "clock": "1893450000",
+      "objectid": "50001",
+      "host": "switch-core-01"
+    },
+    {
+      "eventid": "800002",
+      "name": "Unavailable by ICMP ping",
+      "severity": "5",
+      "clock": "1893451200",
+      "objectid": "50002",
+      "host": "ap-floor3-12"
+    }
+  ]
+}
