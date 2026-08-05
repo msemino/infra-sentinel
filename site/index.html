@@ -139,7 +139,7 @@
 
   .rails{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-top:34px}
   .rail{background:var(--panel);border:2px solid var(--line);border-radius:0;padding:24px}
-  .rail .ic{width:40px;height:40px;border-radius:0;display:grid;place-items:center;font-size:20px;margin-bottom:14px;background:var(--panel2);border:2px solid var(--line2)}
+  .rail .ic{width:42px;height:42px;border-radius:0;display:grid;place-items:center;font-family:var(--mono);font-size:15px;font-weight:700;letter-spacing:-.5px;color:#141210;margin-bottom:14px;background:var(--acc);border:2px solid var(--line)}
   .rail h3{margin:0 0 8px;font-size:17px;font-family:var(--serif);font-weight:600}
   .rail p{margin:0;color:var(--mut);font-size:14.5px}
   .rail code{font-family:var(--mono);font-size:12.5px;color:var(--violet);background:rgba(90,63,192,.1);padding:2px 6px;border-radius:0}
@@ -207,6 +207,15 @@
   .lang-btn:hover{opacity:.85}
   .lang-btn.on{opacity:1;background:var(--acc);color:var(--bg)}
   @media print{.lang-switch{display:none}}
+
+  /* moving flow on the selected path (same pattern as netbox-mcp).
+     Covers every active-state class the page uses, including the
+     outcome colours - matching only `.on` left these paths static. */
+  .flow.on, .flow.on-green, .flow.on-red{stroke-dasharray:5 6;animation:dash 1.05s linear infinite}
+  @keyframes dash{to{stroke-dashoffset:-22}}
+  @media (prefers-reduced-motion:reduce){
+    .flow.on, .flow.on-green, .flow.on-red{animation:none;stroke-dasharray:none}
+  }
 </style>
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20fill%3D%22%230e8577%22%2F%3E%3Cpath%20d%3D%22M8%2020%20L16%208%20L24%2020%20L18%2020%20L18%2026%20L14%2026%20L14%2020%20Z%22%20fill%3D%22%23141210%22%2F%3E%3C%2Fsvg%3E">
 
@@ -332,10 +341,10 @@
   <h2 data-i18n="k25">Guardrails, not glue.</h2>
   <p class="lead" data-i18n="k26">The value isn't the plumbing — it's the pure, unit-tested functions that keep the watchdog useful instead of noisy, wasteful or silent.</p>
   <div class="rails">
-    <div class="rail"><div class="ic">🌱</div><h3 data-i18n="k27">Baseline seeding</h3><p data-i18n="k28">The first cycle records everything already broken as the baseline and raises <b style="color:#141210">nothing</b>. You're never paged for problems that predate the watchdog.</p></div>
-    <div class="rail"><div class="ic">🔁</div><h3 data-i18n="k29">Dedup by <code>objectid</code> + cooldown</h3><p data-i18n="k30">A flapping trigger emits a new event id every cycle. Sentinel keys "already alerted?" on the stable trigger id and suppresses re-alerts within <code>DEDUP_COOLDOWN_SEC</code>. One flapping port = one alert, not one per cycle.</p></div>
-    <div class="rail"><div class="ic">🛑</div><h3 data-i18n="k31">Mass-outage circuit breaker</h3><p data-i18n="k32">A flood of new problems in one cycle (<code>MASS_OUTAGE_THRESHOLD</code>, default 8) is the signature of a core/power failure. Sentinel short-circuits to <b style="color:#141210">one terse alert</b> — no per-event LLM calls, no pager storm.</p></div>
-    <div class="rail"><div class="ic">🩹</div><h3 data-i18n="k33">Graceful degradation</h3><p data-i18n="k34">If the GPU is unreachable, the cycle retries <code>LLM_FAIL_THRESHOLD</code> rounds without advancing state. Still no reasoning? It degrades to the <b style="color:#141210">raw event</b>, flagged "no AI analysis," instead of going silent — then resumes reasoning when the GPU returns. Nothing is lost, nothing is silently dropped.</p></div>
+    <div class="rail"><div class="ic">01</div><h3 data-i18n="k27">Baseline seeding</h3><p data-i18n="k28">The first cycle records everything already broken as the baseline and raises <b style="color:#141210">nothing</b>. You're never paged for problems that predate the watchdog.</p></div>
+    <div class="rail"><div class="ic">02</div><h3 data-i18n="k29">Dedup by <code>objectid</code> + cooldown</h3><p data-i18n="k30">A flapping trigger emits a new event id every cycle. Sentinel keys "already alerted?" on the stable trigger id and suppresses re-alerts within <code>DEDUP_COOLDOWN_SEC</code>. One flapping port = one alert, not one per cycle.</p></div>
+    <div class="rail"><div class="ic">03</div><h3 data-i18n="k31">Mass-outage circuit breaker</h3><p data-i18n="k32">A flood of new problems in one cycle (<code>MASS_OUTAGE_THRESHOLD</code>, default 8) is the signature of a core/power failure. Sentinel short-circuits to <b style="color:#141210">one terse alert</b> — no per-event LLM calls, no pager storm.</p></div>
+    <div class="rail"><div class="ic">04</div><h3 data-i18n="k33">No fallback, ever</h3><p data-i18n="k34">If the self-hosted LLM is unreachable, Sentinel does not degrade to a raw alert. It raises, aborts the cycle, and leaves state <b style="color:#141210">unadvanced</b> — the same event is retried next cycle. An alert is either LLM-reasoned or it doesn't go out at all.</p></div>
   </div>
 </div></section>
 
@@ -363,6 +372,18 @@
       </div>
     </div>
   </div>
+</div></section>
+
+<section id="degrada"><div class="wrap">
+  <div class="eyebrow">The counter-case</div>
+  <h2 data-i18n="k70">No fallback is a choice, and it costs something.</h2>
+  <p class="lead" data-i18n="k71">"An alert is either model-reasoned or it does not go out" reads like rigour, so it is worth saying what it buys and what it spends. A different relay of mine, doing a similar job, made the opposite call: past its timeout it does not fail — it drops to raw mode and sends the alert <b style="color:#141210">with no analysis and no marker</b>. The alerts keep arriving and they are quietly worse.</p>
+  <p class="lead" style="margin-top:14px" data-i18n="k72">The problem there is not the fallback. A fallback is often right. The problem is that <b style="color:#141210">it is indistinguishable from success</b>.</p>
+  <div class="rails">
+    <div class="rail"><h3 data-i18n="k73">Degrade silently</h3><p data-i18n="k74"><b style="color:#141210">Right when</b> a human is watching the channel and a raw alert still helps. <b style="color:#141210">Costs you</b> the reader's ability to tell reasoned from raw. <b style="color:#141210">Non-negotiable:</b> mark the degraded output, or the whole channel becomes untrustworthy.</p></div>
+    <div class="rail"><h3 data-i18n="k75">Refuse outright — what this does</h3><p data-i18n="k76"><b style="color:#141210">Right when</b> the output feeds another system, or nobody is reading closely. <b style="color:#141210">Costs you</b> alerts during an outage of the analyser itself. <b style="color:#141210">Non-negotiable:</b> say out loud that you would rather lose the alert than send an unreasoned one.</p></div>
+  </div>
+  <div class="statusline" style="margin-top:26px" data-i18n="k77"><b>The honest version:</b> this project picked the second because a downstream action layer is the roadmap, and a silently-unreasoned alert feeding an automated fix is a much worse failure than a missing one. On a channel a person reads all day, the other choice would be defensible. The one thing neither is allowed to do is degrade <i>and</i> stay quiet about it.</div>
 </div></section>
 
 <section id="road"><div class="wrap">
@@ -437,13 +458,21 @@ notify(alert)</pre>
       </div>
     </div>
   </div>
+
+  <div class="callout" style="margin-top:34px">
+    <h3 style="margin:0 0 10px" data-i18n="k55">The trade-off, stated plainly</h3>
+    <p data-i18n="k56">The scarcity that keeps the GPU cold is also the scarcity of what the system sees. The LLM never watches raw metrics or the full monitoring state — it only ever reasons over the small diff the pollers already flagged as new. If a problem doesn't surface as a change in Zabbix or Prometheus, it never reaches the model at all. Detection is the ceiling on reasoning, not the other way around.</p>
+    <p data-i18n="k57">And when the model doesn't answer, Sentinel doesn't degrade — it goes quiet. There is deliberately no fallback: if the self-hosted LLM is unreachable, the cycle raises, aborts, and leaves state unadvanced, so the same event is retried next cycle instead of shipped un-reasoned. That is the right call for correctness — no confidently wrong alert ever goes out — but it means a GPU outage and an uneventful night look identical to the operator: both are silence.</p>
+    <p data-i18n="k58">Which is also why rung 3 of the roadmap — acting, not just recommending — stays a human-in-the-loop design on purpose. A model that reasons well over a diff is not the model you hand the keys to production infrastructure, and this repo doesn't pretend otherwise.</p>
+  </div>
+  <p class="sub" style="font-size:13px;opacity:.65;margin-top:22px" data-i18n="k59">Grounded in <code>sentinel/analyzer.py</code>, <code>sentinel/cli.py</code> and <code>sentinel/watchdog.py</code> — no-fallback retry semantics and diff-only snapshots, as shipped.</p>
 </div></section>
 
 <footer><div class="wrap">
   <div style="font-family:var(--mono);color:var(--mut);font-size:14px;margin-bottom:6px">Infra-Sentinel — quiet by design, useful on purpose.</div>
   <div style="font-size:13.5px;max-width:560px;margin:0 auto 18px">Cheap constant detection, rare local reasoning, and — increasingly — the exact fix. MIT-licensed and self-hostable.</div>
   <a class="btn primary" href="https://github.com/msemino/infra-sentinel" target="_blank" rel="noopener">View on GitHub ↗</a>
-  <div style="margin-top:26px;font-size:12px;color:var(--dim)">Built by Marcelo Semino · AI Systems &amp; Automation Architect<br><a href="https://linkedin.com/in/marcelosemino" target="_blank" rel="noopener" style="color:var(--mut);border-bottom:1px solid var(--line2)">linkedin.com/in/marcelosemino</a></div>
+  <div style="margin-top:26px;font-size:12px;color:var(--dim)">AI Systems &amp; Automation Architect · MIT</div>
 </div></footer>
 
 <script>
@@ -528,8 +557,8 @@ const ES = {
   k30: "Un trigger que flapea emite un event id nuevo cada ciclo. Sentinel usa como clave de &quot;¿ya alerté?&quot; el trigger id estable y suprime re-alertas dentro de <code>DEDUP_COOLDOWN_SEC</code>. Un puerto flapeando = una alerta, no una por ciclo.",
   k31: "Circuit breaker de caída masiva",
   k32: "Una avalancha de problemas nuevos en un ciclo (<code>MASS_OUTAGE_THRESHOLD</code>, default 8) es la firma de una falla de core o de energía. Sentinel corta por lo sano y manda <b style='color:#141210'>una sola alerta escueta</b> — sin llamadas al LLM por evento, sin tormenta de notificaciones.",
-  k33: "Degradación elegante",
-  k34: "Si la GPU no responde, el ciclo reintenta <code>LLM_FAIL_THRESHOLD</code> rondas sin avanzar el estado. ¿Sigue sin razonar? Degrada al <b style='color:#141210'>evento crudo</b>, marcado &quot;sin análisis de IA&quot;, en vez de quedarse mudo — y retoma el razonamiento cuando la GPU vuelve. No se pierde nada, nada se descarta en silencio.",
+  k33: "Sin fallback, nunca",
+  k34: "Si el LLM self-hosted no responde, Sentinel no degrada a una alerta cruda. Levanta una excepción, aborta el ciclo y deja el estado <b style='color:#141210'>sin avanzar</b> — el mismo evento se reintenta en el próximo ciclo. Una alerta o sale razonada por el LLM, o no sale.",
   k35: "Dos cerebros",
   k36: "v1 está en producción: convierte triggers crudos en una alerta consciente del impacto. v2 es el salto piloto — un modelo con el runbook de infra incorporado, razonando sobre las <b style='color:#141210'>métricas reales</b> del trigger (no sobre suposiciones), que devuelve el arreglo concreto.",
   k37: "Observar y explicar",
@@ -549,7 +578,20 @@ const ES = {
   k51: "El modelo es un bisturí, no una manguera.",
   k52: "El loop de polling es local y gratis. Al LLM solo se le pide razonar sobre un conjunto <b style='color:#141210'>chico, deduplicado y enriquecido</b> de eventos genuinamente nuevos — y responde con un arreglo concreto.",
   k53: "◂ Todos los proyectos",
-  k54: "Todos los proyectos"
+  k54: "Todos los proyectos",
+  k55: "El trade-off, sin vueltas",
+  k56: "La escasez que mantiene la GPU fría es también la escasez de lo que el sistema ve. El LLM nunca mira las métricas crudas ni el estado completo del monitoreo — razona solo sobre el diff chico que el polling ya marcó como nuevo. Si un problema no aparece como cambio en Zabbix o Prometheus, no llega nunca al modelo. La detección es el techo del razonamiento, no al revés.",
+  k57: "Y cuando el modelo no contesta, Sentinel no degrada — se queda callado. Deliberadamente no hay fallback: si el LLM self-hosted no responde, el ciclo levanta una excepción, aborta y deja el estado sin avanzar, así el mismo evento se reintenta en el próximo ciclo en vez de salir sin razonar. Es la decisión correcta para no mandar nunca una alerta mal fundamentada con total confianza — pero significa que una GPU caída y una noche sin novedades se ven exactamente igual para el operador: las dos son silencio.",
+  k58: "Por eso también el escalón 3 del roadmap — actuar, no solo recomendar — sigue siendo, a propósito, un diseño con humano en el loop. Un modelo que razona bien sobre un diff no es el modelo al que le das las llaves de la infraestructura de producción, y este repo no pretende lo contrario.",
+  k70: "No tener fallback es una decisión, y algo cuesta.",
+  k71: "\"O la alerta está razonada por el modelo o no sale\" suena a rigor, así que conviene decir qué compra y qué gasta. Otro relay mío, haciendo un trabajo parecido, eligió al revés: pasado su timeout no falla — cae a modo crudo y manda la alerta <b style=\"color:#141210\">sin análisis y sin marca</b>. Las alertas siguen llegando y son silenciosamente peores.",
+  k72: "El problema ahí no es el fallback. Un fallback muchas veces está bien. El problema es que <b style=\"color:#141210\">es indistinguible del éxito</b>.",
+  k73: "Degradar en silencio",
+  k74: "<b style=\"color:#141210\">Va cuando</b> hay una persona mirando el canal y una alerta cruda igual sirve. <b style=\"color:#141210\">Te cuesta</b> que el lector ya no distinga razonado de crudo. <b style=\"color:#141210\">Innegociable:</b> marcar la salida degradada, o el canal entero deja de ser confiable.",
+  k75: "Negarse — lo que hace esto",
+  k76: "<b style=\"color:#141210\">Va cuando</b> la salida alimenta a otro sistema, o nadie está leyendo con atención. <b style=\"color:#141210\">Te cuesta</b> perder alertas mientras el analizador está caído. <b style=\"color:#141210\">Innegociable:</b> decir en voz alta que preferís perder la alerta antes que mandar una sin razonar.",
+  k77: "<b>La versión honesta:</b> este proyecto eligió lo segundo porque en el roadmap hay una capa de acción, y una alerta sin razonar alimentando un arreglo automático es una falla mucho peor que una alerta faltante. En un canal que alguien lee todo el día, la otra opción sería defendible. Lo único que ninguna de las dos puede hacer es degradar <i>y</i> quedarse callada.",
+  k59: "Fundamentado en <code>sentinel/analyzer.py</code>, <code>sentinel/cli.py</code> y <code>sentinel/watchdog.py</code> — semántica de no-fallback y snapshots limitados al diff, tal como está en producción."
 };
 const EN_SNAP = {};
 document.querySelectorAll('[data-i18n]').forEach(el => EN_SNAP[el.dataset.i18n] = el.innerHTML);
