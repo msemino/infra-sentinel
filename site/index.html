@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Infra-Sentinel — from watchdog to infrastructure agent</title>
-<meta name="description" content="Cheap, constant detection with Zabbix + Prometheus; rare, local reasoning with a self-hosted LLM. It stopped saying what to watch and started saying what to do — the road to an autonomous infra agent.">
-<meta property="og:title" content="Infra-Sentinel — from watchdog to infrastructure agent">
-<meta property="og:description" content="Detection is free and constant. Reasoning is rare and local. Now it recommends the exact fix — next it acts.">
+<title>Infra-Sentinel — a design decision, reversed by a measurement</title>
+<meta name="description" content="I wrote down why the alert waits for the model. Then one call took 9 minutes and a three-minute outage was reported half an hour late. v2 splits the cycle: the alert never waits, the investigation follows.">
+<meta property="og:title" content="Infra-Sentinel — a design decision, reversed by a measurement">
+<meta property="og:description" content="v1 refused to alert unless the model had reasoned first — argued for in writing. Then it got measured: 9 minutes per call. v2 makes the alert load-bearing and the investigation best-effort.">
 <meta property="og:type" content="website">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -178,6 +178,14 @@
   .needs li{margin:0 0 7px;break-inside:avoid}
   .statusline{margin-top:22px;font-size:15px;color:var(--txt);border-left:3px solid var(--acc);padding:6px 0 6px 16px}
 
+  /* callout — el markup se copió de netbox-mcp sin traerse el CSS, así que el bloque del
+     trade-off renderizaba como un div pelado. Mismas reglas, con las vars del dialecto A. */
+  .callout{border-left:3px solid var(--acc);background:var(--panel2);padding:16px 18px;
+           border-radius:0;margin:22px 0;
+           border-top:2px solid var(--line);border-right:2px solid var(--line);border-bottom:2px solid var(--line)}
+  .callout p:last-child{margin-bottom:0}
+  .callout.warn{border-left-color:var(--red)}
+
   .split{display:grid;grid-template-columns:1.1fr .9fr;gap:26px;align-items:center;margin-top:32px}
   .codecard{background:var(--code-bg);border:2px solid var(--line);border-radius:0;overflow:hidden;font-family:var(--mono);font-size:13px}
   .codecard .bar{display:flex;gap:7px;padding:12px 16px;border-bottom:1px solid #2a2620;background:var(--code-bar)}
@@ -218,14 +226,18 @@
   }
 </style>
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20fill%3D%22%230e8577%22%2F%3E%3Cpath%20d%3D%22M8%2020%20L16%208%20L24%2020%20L18%2020%20L18%2026%20L14%2026%20L14%2020%20Z%22%20fill%3D%22%23141210%22%2F%3E%3C%2Fsvg%3E">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 
 <meta property="og:url" content="https://infra-sentinel.vercel.app">
 <meta property="og:image" content="https://infra-sentinel.vercel.app/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Infra-Sentinel — from watchdog to infrastructure agent">
-<meta name="twitter:description" content="Detection is free and constant. Reasoning is rare and local. Now it recommends the exact fix — next it acts.">
+<meta name="twitter:title" content="Infra-Sentinel — a design decision, reversed by a measurement">
+<meta name="twitter:description" content="v1 refused to alert unless the model had reasoned first — argued for in writing. Then it got measured: 9 minutes per call. v2 makes the alert load-bearing and the investigation best-effort.">
 <meta name="twitter:image" content="https://infra-sentinel.vercel.app/og.png">
 </head>
 <body>
@@ -239,7 +251,8 @@
   <div class="brand"><span class="dot"></span>Infra-Sentinel</div>
   <div class="nav-links">
     <a href="#flow">Pipeline</a>
-    <a href="#brains">v1 → v2</a>
+    <a href="#degrada">v1 → v2</a>
+    <a href="#brains">Two brains</a>
     <a href="#road">Roadmap</a>
     <a class="btn ghost" href="https://proyectos-msemino.vercel.app" data-i18n="k53">◂ All projects</a>
     <a class="btn ghost" href="https://github.com/msemino/infra-sentinel" target="_blank" rel="noopener">GitHub ↗</a>
@@ -247,20 +260,20 @@
 </div></nav>
 
 <header><div class="wrap">
-  <div class="kicker" data-i18n="k3"><span class="b"></span>LLM-IN-THE-LOOP · SELF-HOSTED · FROM WATCHDOG TO AGENT</div>
-  <h1 data-i18n="k1">It stopped saying <span class="grad">what to watch</span>.<br>It started saying <span class="grad">what to do</span>.</h1>
-  <p class="sub" data-i18n="k2">Infra-Sentinel polls Zabbix and Prometheus with cheap, constant checks — and <b>only when something is genuinely new</b> does a <b>self-hosted LLM</b> reason about it. v1 tells an operator what to look at. v2 hands them the <b>exact command</b>. The road ahead: an agent that acts.</p>
+  <div class="kicker" data-i18n="k3"><span class="b"></span>LLM-IN-THE-LOOP · SELF-HOSTED · A DESIGN DECISION, REVERSED BY A MEASUREMENT</div>
+  <h1 data-i18n="k1">I wrote down why the alert <span class="grad">waits for the model</span>.<br>Then I measured it.</h1>
+  <p class="sub" data-i18n="k2">Infra-Sentinel polls Zabbix and Prometheus with cheap, constant checks and calls a <b>self-hosted model</b> only on real news. v1 refused to alert unless the model had reasoned about it — argued for in writing, as rigour. Then one call took <b>9 minutes</b>, and a three-minute outage got reported half an hour late. v2 splits the cycle in two: <b>the alert never waits for the model</b>, the investigation follows.</p>
   <div class="hero-cta">
-    <a class="btn primary" href="#flow" data-i18n="k8">▸ Watch the pipeline</a>
+    <a class="btn primary" href="#degrada" data-i18n="k8">▸ What the measurement changed</a>
     <a class="btn ghost" href="https://github.com/msemino/infra-sentinel" target="_blank" rel="noopener">Read the code</a>
     <a class="btn ghost" href="https://proyectos-msemino.vercel.app" data-i18n="k54">All projects</a>
   </div>
 
   <div class="metrics">
-    <div class="metric"><div class="big c-green">0 <span style="font-size:.6em">calls/hr</span></div><div class="lbl" data-i18n="k4">GPU stays cold until there's real news</div></div>
-    <div class="metric"><div class="big c-violet">1 <span style="font-size:.6em">alert</span></div><div class="lbl" data-i18n="k5">impact-aware, not a flood of triggers</div></div>
-    <div class="metric"><div class="big c-teal">exact <span style="font-size:.6em">fix</span></div><div class="lbl" data-i18n="k6">v2: command + where + escalation</div></div>
-    <div class="metric"><div class="big c-blue">100% <span style="font-size:.6em">local</span></div><div class="lbl" data-i18n="k7">self-hosted LLM, zero cloud egress</div></div>
+    <div class="metric"><div class="big c-red">9m00s <span style="font-size:.6em">measured</span></div><div class="lbl" data-i18n="k4">one model call, on the hardware that exists — the number that reversed the design</div></div>
+    <div class="metric"><div class="big c-violet">2 <span style="font-size:.6em">phases</span></div><div class="lbl" data-i18n="k5">alert without the model, report after it</div></div>
+    <div class="metric"><div class="big c-teal">~0.1s <span style="font-size:.6em">evidence</span></div><div class="lbl" data-i18n="k6">four bounded queries, no model, before the prompt</div></div>
+    <div class="metric"><div class="big c-green">0 <span style="font-size:.6em">calls/hr</span></div><div class="lbl" data-i18n="k7">steady state: the model is never touched</div></div>
   </div>
 </div></header>
 
@@ -286,7 +299,7 @@
       <button class="scen" data-s="news" data-i18n="k22">▲ One new problem</button>
       <button class="scen" data-s="flood" data-i18n="k23">✷ Mass outage</button>
     </div>
-    <div class="scen-hint" id="hint">Steady state — the diff is empty, the GPU is never called.</div>
+    <div class="scen-hint" id="hint">Steady state — the diff is empty, the model is never called.</div>
 
     <svg viewBox="0 0 1000 360" width="100%" role="img" aria-label="Infra-Sentinel data pipeline">
       <!-- edges -->
@@ -312,13 +325,13 @@
         <text class="lbl-s" x="340" y="185" text-anchor="middle">+ dedup · cooldown</text></g>
       <g class="node silence" id="n-silence"><rect x="255" y="268" width="170" height="46" rx="11"/>
         <text class="lbl-t" x="340" y="290" text-anchor="middle">silence</text>
-        <text class="lbl-s" x="340" y="305" text-anchor="middle">no-op · GPU idle</text></g>
+        <text class="lbl-s" x="340" y="305" text-anchor="middle">no-op · model idle</text></g>
       <g class="node" id="n-cb"><rect x="490" y="145" width="150" height="54" rx="11"/>
         <text class="lbl-t" x="565" y="169" text-anchor="middle">circuit breaker</text>
         <text class="lbl-s" x="565" y="185" text-anchor="middle">flood? threshold 8</text></g>
       <g class="node llm" id="n-llm"><rect x="710" y="60" width="160" height="54" rx="11"/>
         <text class="lbl-t" x="790" y="84" text-anchor="middle">self-hosted LLM</text>
-        <text class="lbl-s" x="790" y="100" text-anchor="middle">Ollama · on-prem GPU</text></g>
+        <text class="lbl-s" x="790" y="100" text-anchor="middle">Ollama · self-hosted</text></g>
       <g class="node terse" id="n-terse"><rect x="710" y="150" width="160" height="50" rx="11"/>
         <text class="lbl-t" x="790" y="172" text-anchor="middle">terse alert</text>
         <text class="lbl-s" x="790" y="188" text-anchor="middle">LLM skipped</text></g>
@@ -344,24 +357,25 @@
     <div class="rail"><div class="ic">01</div><h3 data-i18n="k27">Baseline seeding</h3><p data-i18n="k28">The first cycle records everything already broken as the baseline and raises <b style="color:#141210">nothing</b>. You're never paged for problems that predate the watchdog.</p></div>
     <div class="rail"><div class="ic">02</div><h3 data-i18n="k29">Dedup by <code>objectid</code> + cooldown</h3><p data-i18n="k30">A flapping trigger emits a new event id every cycle. Sentinel keys "already alerted?" on the stable trigger id and suppresses re-alerts within <code>DEDUP_COOLDOWN_SEC</code>. One flapping port = one alert, not one per cycle.</p></div>
     <div class="rail"><div class="ic">03</div><h3 data-i18n="k31">Mass-outage circuit breaker</h3><p data-i18n="k32">A flood of new problems in one cycle (<code>MASS_OUTAGE_THRESHOLD</code>, default 8) is the signature of a core/power failure. Sentinel short-circuits to <b style="color:#141210">one terse alert</b> — no per-event LLM calls, no pager storm.</p></div>
-    <div class="rail"><div class="ic">04</div><h3 data-i18n="k33">No fallback, ever</h3><p data-i18n="k34">If the self-hosted LLM is unreachable, Sentinel does not degrade to a raw alert. It raises, aborts the cycle, and leaves state <b style="color:#141210">unadvanced</b> — the same event is retried next cycle. An alert is either LLM-reasoned or it doesn't go out at all.</p></div>
+    <div class="rail"><div class="ic">04</div><h3 data-i18n="k33">Event window, exactly once</h3><p data-i18n="k34">The active-problem query answers <i>"what is broken now"</i>, so an incident that opens and closes between two rounds is invisible to it &mdash; recorded perfectly by the monitoring system, never seen by the watchdog. A second query asks for events <b style="color:#141210">in a time range</b>; the ranges overlap on purpose so nothing falls between them, and a ledger of alerted ids is what stops the overlap from alerting twice. Dropping the overlap would trade a duplicate for a miss, and for a watchdog a duplicate gets noticed while a silence does not.</p></div>
+    <div class="rail"><div class="ic">05</div><h3 data-i18n="k86">Degrade the enrichment, never the delivery</h3><p data-i18n="k87">The alert is built from raw facts and sent <b style="color:#141210">before the model is contacted</b>, and the baseline advances with it &mdash; if the send fails, it does not advance and the next round retries. Everything after that point is best-effort by construction. This <a href="#degrada" style="color:inherit;text-decoration:underline">reverses what v1 did</a>, and the reason it reversed is a measurement.</p></div>
   </div>
 </div></section>
 
 <section id="brains"><div class="wrap">
-  <div class="eyebrow" data-i18n="k35">Two brains</div>
+  <div class="eyebrow" data-i18n="k35">Two brains · capability, not release</div>
   <h2>From <span class="grad">what to watch</span> → <span class="grad">what to do</span>.</h2>
-  <p class="lead" data-i18n="k36">v1 is in production: it turns raw triggers into one impact-aware alert. v2 is the pilot leap — a model with the infra runbook baked in, reasoning over the trigger's <b style="color:#141210">real metrics</b> (not guesses), that returns the concrete fix.</p>
+  <p class="lead" data-i18n="k36">Rung 1 is in production: it turns raw triggers into one impact-aware alert. Rung 2 is the pilot leap — a model with the infra runbook baked in, reasoning over the trigger's <b style="color:#141210">real metrics</b> (not guesses), that returns the concrete fix.</p>
   <div class="compare">
     <div class="vcard">
-      <div class="vh"><span class="vbadge v1">v1</span><div><div class="vt" data-i18n="k37">Observe &amp; explain</div><div class="vs">production · Qwen 27B (base)</div></div></div>
+      <div class="vh"><span class="vbadge v1">rung 1</span><div><div class="vt" data-i18n="k37">Observe &amp; explain</div><div class="vs">production · Qwen 27B (base)</div></div></div>
       <div class="vbody">
         <div class="mock"><b style="color:#141210">▲ Core switch uplink unreachable.</b><br>Distribution path for the wireless VLAN is at risk. Check the switch and its power feed before APs drop.</div>
         Turns a pile of triggers into one human-readable, impact-aware message. Great triage — but the operator still has to know the fix.
       </div>
     </div>
     <div class="vcard hl">
-      <div class="vh"><span class="vbadge v2">v2</span><div><div class="vt" data-i18n="k38">Recommend the fix</div><div class="vs">pilot · <span class="mono">sentinel-infra</span> (runbook-baked)</div></div></div>
+      <div class="vh"><span class="vbadge v2">rung 2</span><div><div class="vt" data-i18n="k38">Recommend the fix</div><div class="vs">pilot · <span class="mono">sentinel-infra</span> (runbook-baked)</div></div></div>
       <div class="vbody">
         <div class="mock"><b style="color:#141210">▲ Gi0/2 negotiated 10 Mbps — expected 1000 (Gi class).</b><br>Cause: speed/duplex mismatch after a link flap.
         <span class="cmd">interface Gi0/2
@@ -375,15 +389,16 @@
 </div></section>
 
 <section id="degrada"><div class="wrap">
-  <div class="eyebrow">The counter-case</div>
-  <h2 data-i18n="k70">No fallback is a choice, and it costs something.</h2>
-  <p class="lead" data-i18n="k71">"An alert is either model-reasoned or it does not go out" reads like rigour, so it is worth saying what it buys and what it spends. A different relay of mine, doing a similar job, made the opposite call: past its timeout it does not fail — it drops to raw mode and sends the alert <b style="color:#141210">with no analysis and no marker</b>. The alerts keep arriving and they are quietly worse.</p>
-  <p class="lead" style="margin-top:14px" data-i18n="k72">The problem there is not the fallback. A fallback is often right. The problem is that <b style="color:#141210">it is indistinguishable from success</b>.</p>
-  <div class="rails">
-    <div class="rail"><h3 data-i18n="k73">Degrade silently</h3><p data-i18n="k74"><b style="color:#141210">Right when</b> a human is watching the channel and a raw alert still helps. <b style="color:#141210">Costs you</b> the reader's ability to tell reasoned from raw. <b style="color:#141210">Non-negotiable:</b> mark the degraded output, or the whole channel becomes untrustworthy.</p></div>
-    <div class="rail"><h3 data-i18n="k75">Refuse outright — what this does</h3><p data-i18n="k76"><b style="color:#141210">Right when</b> the output feeds another system, or nobody is reading closely. <b style="color:#141210">Costs you</b> alerts during an outage of the analyser itself. <b style="color:#141210">Non-negotiable:</b> say out loud that you would rather lose the alert than send an unreasoned one.</p></div>
+  <div class="eyebrow">The reversal</div>
+  <h2 data-i18n="k70">I argued for it in writing. Then a number took it apart.</h2>
+  <p class="lead" data-i18n="k71">v1 ran <code>detect &rarr; reason &rarr; notify</code> and only advanced its baseline once the whole pipeline had succeeded. The README defended the consequence as rigour, in these words: <b style="color:#141210">"an operator alert is either LLM-reasoned or it doesn't go out."</b> That argument is coherent. It also put the model on the critical path of the notification &mdash; and nobody priced that, because on the hardware in the design document the model answers in seconds.</p>
+  <p class="lead" style="margin-top:14px" data-i18n="k72">On the hardware that exists, one call took <b style="color:#141210">9 minutes</b>. With 15-minute rounds, a three-minute outage was being reported up to <b style="color:#141210">half an hour late</b>. That is not a reasoned alert; it is an obituary. The decision was right about what it optimised for and wrong about what mattered.</p>
+  <div class="compare" style="margin-top:30px">
+    <div class="vcard"><div class="vh"><span class="vbadge v1">v1</span><span class="vt" data-i18n="k78">Refuse outright</span></div><div class="vs" data-i18n="k79">detect &rarr; reason &rarr; notify</div><div class="vbody" data-i18n="k80"><b style="color:#141210">Buys:</b> every message that arrives has been reasoned about. Nothing half-finished reaches a human, or a downstream action layer.<br><br><b style="color:#141210">Spends:</b> the notification itself. A slow model delays it; an unreachable one withholds it entirely. The failure is invisible from the outside &mdash; a silent channel is also what a healthy day looks like.</div></div>
+    <div class="vcard hl"><div class="vh"><span class="vbadge v2">v2</span><span class="vt" data-i18n="k81">Split the guarantees</span></div><div class="vs" data-i18n="k82">alert &rarr; advance baseline &rarr; investigate &rarr; report</div><div class="vbody" data-i18n="k83"><b style="color:#141210">Phase 1 is load-bearing.</b> Raw facts, no model, seconds. The baseline advances <i>here</i>: if delivery fails it does not advance, and the next round retries.<br><br><b style="color:#141210">Phase 2 is best-effort.</b> If the investigation breaks, a short message says so. Never silent, never holding the alert back.</div></div>
   </div>
-  <div class="statusline" style="margin-top:26px" data-i18n="k77"><b>The honest version:</b> this project picked the second because a downstream action layer is the roadmap, and a silently-unreasoned alert feeding an automated fix is a much worse failure than a missing one. On a channel a person reads all day, the other choice would be defensible. The one thing neither is allowed to do is degrade <i>and</i> stay quiet about it.</div>
+  <div class="callout" style="margin-top:28px" data-i18n="k84"><b>The rule was already written down.</b> <i>Degrade the enrichment, never the delivery</i> was in the design notes from the start. v2 is not a new principle &mdash; it is the point where the code started obeying one it had been stating. That gap is the ordinary way this fails: the policy is in the prose, the ordering is in the code, and nothing checks that they agree.</div>
+  <div class="statusline" style="margin-top:22px" data-i18n="k85"><b>What a fallback is still not allowed to do:</b> degrade <i>and</i> stay quiet about it. A raw alert sent with no marker is indistinguishable from a reasoned one, and the channel silently gets worse. Phase 2 failing produces a message that says the investigation failed &mdash; because "it broke" and "it found nothing" call for different responses from the person reading.</div>
 </div></section>
 
 <section id="road"><div class="wrap">
@@ -424,17 +439,17 @@
 </div></section>
 
 <section><div class="wrap">
-  <div class="eyebrow" data-i18n="k50">Why the GPU stays cold</div>
+  <div class="eyebrow" data-i18n="k50">Why the model is rarely called</div>
   <h2 data-i18n="k51">The model is a scalpel, not a firehose.</h2>
   <div class="split">
     <div class="codecard">
       <div class="bar"><i style="background:#f87171"></i><i style="background:#fbbf24"></i><i style="background:#34d399"></i><span style="color:#6b6355;margin-left:8px">watchdog.py — the hot path</span></div>
-<pre><span class="c"># cheap + constant: runs every cycle, no GPU</span>
+<pre><span class="c"># cheap + constant: runs every cycle, no model</span>
 delta = <span class="k">diff</span>(current, baseline)
 delta = <span class="k">dedup_with_cooldown</span>(delta, state)
 
 <span class="k">if not</span> delta:
-    <span class="k">return</span>                 <span class="c"># steady state → 0 GPU calls</span>
+    <span class="k">return</span>                 <span class="c"># steady state → 0 model calls</span>
 
 <span class="k">if</span> <span class="k">len</span>(delta) &gt;= <span class="n">MASS_OUTAGE_THRESHOLD</span>:
     notify(<span class="s">terse_outage_alert</span>(delta))
@@ -461,8 +476,8 @@ notify(alert)</pre>
 
   <div class="callout" style="margin-top:34px">
     <h3 style="margin:0 0 10px" data-i18n="k55">The trade-off, stated plainly</h3>
-    <p data-i18n="k56">The scarcity that keeps the GPU cold is also the scarcity of what the system sees. The LLM never watches raw metrics or the full monitoring state — it only ever reasons over the small diff the pollers already flagged as new. If a problem doesn't surface as a change in Zabbix or Prometheus, it never reaches the model at all. Detection is the ceiling on reasoning, not the other way around.</p>
-    <p data-i18n="k57">And when the model doesn't answer, Sentinel doesn't degrade — it goes quiet. There is deliberately no fallback: if the self-hosted LLM is unreachable, the cycle raises, aborts, and leaves state unadvanced, so the same event is retried next cycle instead of shipped un-reasoned. That is the right call for correctness — no confidently wrong alert ever goes out — but it means a GPU outage and an uneventful night look identical to the operator: both are silence.</p>
+    <p data-i18n="k56">The scarcity that keeps the model idle is also the scarcity of what the system sees. The LLM never watches raw metrics or the full monitoring state — it only ever reasons over the small diff the pollers already flagged as new. If a problem doesn't surface as a change in Zabbix or Prometheus, it never reaches the model at all. Detection is the ceiling on reasoning, not the other way around.</p>
+    <p data-i18n="k57">This page used to say that when the model does not answer, Sentinel goes quiet &mdash; no fallback, the cycle aborts, the event is retried rather than shipped un-reasoned. That was true, it was defended as correctness, and it meant <b style="color:#141210">a model outage and an uneventful night looked identical to the operator: both were silence</b>. v2 splits the difference the only way that does not lie: the alert goes out from raw facts and does not wait, and a failed investigation produces a message saying the investigation failed. Degraded, and <i>marked</i> as degraded.</p>
     <p data-i18n="k58">Which is also why rung 3 of the roadmap — acting, not just recommending — stays a human-in-the-loop design on purpose. A model that reasons well over a diff is not the model you hand the keys to production infrastructure, and this repo doesn't pretend otherwise.</p>
   </div>
   <p class="sub" style="font-size:13px;opacity:.65;margin-top:22px" data-i18n="k59">Grounded in <code>sentinel/analyzer.py</code>, <code>sentinel/cli.py</code> and <code>sentinel/watchdog.py</code> — no-fallback retry semantics and diff-only snapshots, as shipped.</p>
@@ -478,14 +493,14 @@ notify(alert)</pre>
 <script>
 const S = {
   quiet:{
-    hint:"Steady state — the diff is empty, the GPU is never called.",
+    hint:"Steady state — the diff is empty, the model is never called.",
     edges:[["e-z","on-green"],["e-p","on-green"],["e-quiet","on-green"]],
     hot:[["n-zbx","hot-green"],["n-prom","hot-green"],["n-diff","hot-green"],["n-silence","hot-green"]],
     cold:["n-cb","n-llm","n-terse","n-notify"],
     path:"M180,75 C218,75 218,172 300,172 L340,199 L340,268", color:"--green",
     tg:{sub:"cycle • no change",
       body:'<span class="t-gr">✓ Nothing new.</span> Diff empty after dedup. No LLM call, no message sent.\n\n<span style="color:#6b6355">(shown for the demo — in steady state the operator gets silence)</span>',
-      meta:["GPU calls: 0","LLM: idle","cost: $0"]}
+      meta:["model calls: 0","model: idle","cost: $0"]}
   },
   news:{
     hint:"One genuine new problem → guardrails → enriched with real metrics → LLM returns the fix.",
@@ -495,7 +510,7 @@ const S = {
     path:"M180,75 C218,75 218,172 255,172 L425,172 L490,172 L640,172 C675,172 675,87 710,87 L870,87 C883,87 883,134 890,134", color:"--violet",
     tg:{sub:"v2 • remediation",
       body:'<span class="t-vi">▲ Gi0/2 negotiated 10 Mbps — expected 1000 (Gi class).</span>\nCause: speed/duplex mismatch after a link flap.<span class="cmd">interface Gi0/2\n speed 1000\n duplex full</span>Run from the distribution switch CLI. No recovery in 2 cycles → escalate to network on-call.',
-      meta:["GPU calls: 1","runbook-grounded","exact command"]}
+      meta:["model calls: 1","runbook-grounded","exact command"]}
   },
   flood:{
     hint:"A flood in one cycle (≥ threshold) → circuit breaker → one terse alert, LLM skipped.",
@@ -505,34 +520,34 @@ const S = {
     path:"M180,75 C218,75 218,172 255,172 L425,172 L490,172 L640,172 C662,172 688,175 710,175 L870,175 C883,175 883,134 890,134", color:"--red",
     tg:{sub:"circuit breaker fired",
       body:'<span class="t-red">✷ Possible mass outage — 14 new problems this cycle.</span>\n\nSignature of a core/power failure. Not fanning out per-event or calling the LLM. Check Zabbix / Grafana now.',
-      meta:["GPU calls: 0","breaker: OPEN","1 terse alert"]}
+      meta:["model calls: 0","breaker: OPEN","1 terse alert"]}
   }
 };
 
 const S_ES = {
-  quiet:{ hint:"Estado estable — el diff está vacío, la GPU nunca se llama.",
+  quiet:{ hint:"Estado estable — el diff está vacío, al modelo nunca se lo llama.",
     tg:{sub:"ciclo • sin cambios",
       body:'<span class="t-gr">✓ Nada nuevo.</span> Diff vacío después del dedup. Sin llamada al LLM, sin mensaje enviado.\n\n<span style="color:#6b6355">(se muestra para la demo — en estado estable el operador recibe silencio)</span>',
-      meta:["llamadas GPU: 0","LLM: en reposo","costo: $0"]}},
+      meta:["llamadas al modelo: 0","modelo: en reposo","costo: $0"]}},
   news:{ hint:"Un problema nuevo genuino → guardrails → enriquecido con métricas reales → el LLM devuelve el arreglo.",
     tg:{sub:"v2 • remediación",
       body:'<span class="t-vi">▲ Gi0/2 negoció 10 Mbps — se esperaban 1000 (clase Gi).</span>\nCausa: mismatch de speed/duplex después de un link flap.<span class="cmd">interface Gi0/2\n speed 1000\n duplex full</span>Correr desde la CLI del switch de distribución. Sin recuperación en 2 ciclos → escalar a la guardia de red.',
-      meta:["llamadas GPU: 1","anclado en runbook","comando exacto"]}},
+      meta:["llamadas al modelo: 1","anclado en runbook","comando exacto"]}},
   flood:{ hint:"Una avalancha en un ciclo (≥ umbral) → circuit breaker → una alerta escueta, LLM salteado.",
     tg:{sub:"circuit breaker disparado",
       body:'<span class="t-red">✷ Posible caída masiva — 14 problemas nuevos este ciclo.</span>\n\nFirma de una falla de core o de energía. No dispara una alerta por evento ni llama al LLM. Revisá Zabbix / Grafana ahora.',
-      meta:["llamadas GPU: 0","breaker: ABIERTO","1 alerta escueta"]}}
+      meta:["llamadas al modelo: 0","breaker: ABIERTO","1 alerta escueta"]}}
 };
 let LANG = "en", CUR = "quiet";
 const ES = {
-  k1: "Dejó de decir <span class='grad'>qué mirar</span>.<br>Empezó a decir <span class='grad'>qué hacer</span>.",
-  k2: "Infra-Sentinel consulta Zabbix y Prometheus con chequeos baratos y constantes — y un <b>LLM self-hosted</b> se pone a razonar <b>solo cuando hay algo genuinamente nuevo</b>. v1 le dice al operador qué mirar. v2 le entrega el <b>comando exacto</b>. Lo que viene: un agente que actúa.",
-  k3: "<span class='b'></span>LLM-IN-THE-LOOP · SELF-HOSTED · DE WATCHDOG A AGENTE",
-  k4: "La GPU sigue fría hasta que hay novedad real",
-  k5: "consciente del impacto, no una avalancha de triggers",
-  k6: "v2: comando + desde dónde + escalado",
-  k7: "LLM self-hosted, cero egreso a la nube",
-  k8: "▸ Mirá el pipeline",
+  k1: "Escribí por qué la alerta <span class='grad'>espera al modelo</span>.<br>Después lo medí.",
+  k2: "Infra-Sentinel consulta Zabbix y Prometheus con chequeos baratos y constantes, y llama a un <b>modelo self-hosted</b> solo cuando hay novedad real. La v1 se negaba a avisar si el modelo no había razonado antes — argumentado por escrito, como rigor. Después una consulta tardó <b>9 minutos</b>, y un corte de tres minutos se reportó media hora tarde. La v2 parte el ciclo en dos: <b>la alerta no espera al modelo</b>, la investigación va después.",
+  k3: "<span class='b'></span>LLM-IN-THE-LOOP · SELF-HOSTED · UNA DECISIÓN DE DISEÑO, REVERTIDA POR UNA MEDICIÓN",
+  k4: "una consulta al modelo, en el hardware que existe — el número que revirtió el diseño",
+  k5: "alerta sin el modelo, informe después",
+  k6: "cuatro consultas acotadas, sin modelo, antes del prompt",
+  k7: "régimen estable: al modelo no se lo toca",
+  k8: "▸ Qué cambió la medición",
   k9: "El camino del medio",
   k10: "Los stacks de alertas suelen ser tontos o caros.",
   k11: "Reenviá cada trigger crudo y ahogás al operador. Mandá todo a un LLM en la nube y pagás por token para razonar sobre ruido. Infra-Sentinel parte el trabajo: el polling local detecta, un modelo local razona — solo sobre el delta.",
@@ -557,10 +572,12 @@ const ES = {
   k30: "Un trigger que flapea emite un event id nuevo cada ciclo. Sentinel usa como clave de &quot;¿ya alerté?&quot; el trigger id estable y suprime re-alertas dentro de <code>DEDUP_COOLDOWN_SEC</code>. Un puerto flapeando = una alerta, no una por ciclo.",
   k31: "Circuit breaker de caída masiva",
   k32: "Una avalancha de problemas nuevos en un ciclo (<code>MASS_OUTAGE_THRESHOLD</code>, default 8) es la firma de una falla de core o de energía. Sentinel corta por lo sano y manda <b style='color:#141210'>una sola alerta escueta</b> — sin llamadas al LLM por evento, sin tormenta de notificaciones.",
-  k33: "Sin fallback, nunca",
-  k34: "Si el LLM self-hosted no responde, Sentinel no degrada a una alerta cruda. Levanta una excepción, aborta el ciclo y deja el estado <b style='color:#141210'>sin avanzar</b> — el mismo evento se reintenta en el próximo ciclo. Una alerta o sale razonada por el LLM, o no sale.",
-  k35: "Dos cerebros",
-  k36: "v1 está en producción: convierte triggers crudos en una alerta consciente del impacto. v2 es el salto piloto — un modelo con el runbook de infra incorporado, razonando sobre las <b style='color:#141210'>métricas reales</b> del trigger (no sobre suposiciones), que devuelve el arreglo concreto.",
+  k33: "Ventana de eventos, exactamente una vez",
+  k34: "La consulta de problemas activos responde <i>\"qué está roto ahora\"</i>, así que un incidente que abre y cierra entre dos rondas le es invisible &mdash; registrado perfecto por el monitoreo, nunca visto por el vigía. Una segunda consulta pide eventos <b style=\"color:#141210\">en un rango de tiempo</b>; los rangos se solapan a propósito para que nada caiga entre dos, y un registro de ids ya avisados es lo que evita que el solape avise dos veces. Sacar el solape sería cambiar un duplicado por un faltante, y para un vigía el duplicado se nota y el silencio no.",
+  k86: "Se degrada el enriquecimiento, nunca la entrega",
+  k87: "La alerta se arma con hechos crudos y se manda <b style=\"color:#141210\">antes de contactar al modelo</b>, y la baseline avanza con ella &mdash; si el envío falla, no avanza y la ronda siguiente reintenta. Todo lo que viene después es best-effort por construcción. Esto <a href=\"#degrada\" style=\"color:inherit;text-decoration:underline\">revierte lo que hacía la v1</a>, y lo que lo revirtió fue una medición.",
+  k35: "Dos cerebros · capacidad, no release",
+  k36: "El escalón 1 está en producción: convierte una pila de triggers en una sola alerta consciente del impacto. El escalón 2 es el salto piloto &mdash; un modelo con el runbook de infra horneado, razonando sobre las <b style=\"color:#141210\">métricas reales</b> del trigger (no sobre suposiciones), que devuelve el comando concreto.",
   k37: "Observar y explicar",
   k38: "Recomendar el arreglo",
   k39: "La visión",
@@ -574,23 +591,26 @@ const ES = {
   k47: "Ejecutar remediaciones seguras e idempotentes de un catálogo cerrado, aprobadas desde el chat, y después verificar que el problema se fue antes de cerrar. De asesor a operador.",
   k48: "Lo que al escalón 3 todavía le falta (la lista honesta)",
   k49: "<b>Dónde está honestamente:</b> la mitad del razonamiento está mayormente resuelta — v2 ya recomienda el arreglo exacto, anclado en un runbook y en métricas vivas. La mitad de <i>actuar</i> — una capa de acciones seguras con aprobaciones y verificación — está casi sin construir, y ahí vive la ingeniería real (y el riesgo real). El cerebro ya casi está cerrado; las manos, a propósito, todavía no.",
-  k50: "Por qué la GPU sigue fría",
+  k50: "Por qué al modelo casi no se lo llama",
   k51: "El modelo es un bisturí, no una manguera.",
   k52: "El loop de polling es local y gratis. Al LLM solo se le pide razonar sobre un conjunto <b style='color:#141210'>chico, deduplicado y enriquecido</b> de eventos genuinamente nuevos — y responde con un arreglo concreto.",
   k53: "◂ Todos los proyectos",
   k54: "Todos los proyectos",
   k55: "El trade-off, sin vueltas",
-  k56: "La escasez que mantiene la GPU fría es también la escasez de lo que el sistema ve. El LLM nunca mira las métricas crudas ni el estado completo del monitoreo — razona solo sobre el diff chico que el polling ya marcó como nuevo. Si un problema no aparece como cambio en Zabbix o Prometheus, no llega nunca al modelo. La detección es el techo del razonamiento, no al revés.",
-  k57: "Y cuando el modelo no contesta, Sentinel no degrada — se queda callado. Deliberadamente no hay fallback: si el LLM self-hosted no responde, el ciclo levanta una excepción, aborta y deja el estado sin avanzar, así el mismo evento se reintenta en el próximo ciclo en vez de salir sin razonar. Es la decisión correcta para no mandar nunca una alerta mal fundamentada con total confianza — pero significa que una GPU caída y una noche sin novedades se ven exactamente igual para el operador: las dos son silencio.",
+  k56: "La escasez que mantiene al modelo en reposo es también la escasez de lo que el sistema ve. El modelo nunca mira las métricas crudas ni el estado completo del monitoreo &mdash; razona solo sobre el pequeño diff que los pollers ya marcaron como nuevo. Si un problema no aparece como un cambio en Zabbix o Prometheus, nunca le llega. La detección es el techo del razonamiento, no al revés.",
+  k57: "Esta página decía que cuando el modelo no contesta, Sentinel se queda callado &mdash; sin fallback, el ciclo aborta y el evento se reintenta en vez de salir sin razonar. Era cierto, se defendía como corrección, y significaba que <b style=\"color:#141210\">una caída del modelo y una noche tranquila se veían iguales para el operador: las dos eran silencio</b>. La v2 parte la diferencia de la única forma que no miente: la alerta sale con hechos crudos y no espera, y una investigación fallida produce un mensaje que dice que la investigación falló. Degradado, y <i>marcado</i> como degradado.",
   k58: "Por eso también el escalón 3 del roadmap — actuar, no solo recomendar — sigue siendo, a propósito, un diseño con humano en el loop. Un modelo que razona bien sobre un diff no es el modelo al que le das las llaves de la infraestructura de producción, y este repo no pretende lo contrario.",
-  k70: "No tener fallback es una decisión, y algo cuesta.",
-  k71: "\"O la alerta está razonada por el modelo o no sale\" suena a rigor, así que conviene decir qué compra y qué gasta. Otro relay mío, haciendo un trabajo parecido, eligió al revés: pasado su timeout no falla — cae a modo crudo y manda la alerta <b style=\"color:#141210\">sin análisis y sin marca</b>. Las alertas siguen llegando y son silenciosamente peores.",
-  k72: "El problema ahí no es el fallback. Un fallback muchas veces está bien. El problema es que <b style=\"color:#141210\">es indistinguible del éxito</b>.",
-  k73: "Degradar en silencio",
-  k74: "<b style=\"color:#141210\">Va cuando</b> hay una persona mirando el canal y una alerta cruda igual sirve. <b style=\"color:#141210\">Te cuesta</b> que el lector ya no distinga razonado de crudo. <b style=\"color:#141210\">Innegociable:</b> marcar la salida degradada, o el canal entero deja de ser confiable.",
-  k75: "Negarse — lo que hace esto",
-  k76: "<b style=\"color:#141210\">Va cuando</b> la salida alimenta a otro sistema, o nadie está leyendo con atención. <b style=\"color:#141210\">Te cuesta</b> perder alertas mientras el analizador está caído. <b style=\"color:#141210\">Innegociable:</b> decir en voz alta que preferís perder la alerta antes que mandar una sin razonar.",
-  k77: "<b>La versión honesta:</b> este proyecto eligió lo segundo porque en el roadmap hay una capa de acción, y una alerta sin razonar alimentando un arreglo automático es una falla mucho peor que una alerta faltante. En un canal que alguien lee todo el día, la otra opción sería defendible. Lo único que ninguna de las dos puede hacer es degradar <i>y</i> quedarse callada.",
+  k70: "Lo argumenté por escrito. Después un número lo desarmó.",
+  k71: "La v1 corría <code>detectar &rarr; razonar &rarr; notificar</code> y solo avanzaba la baseline cuando todo el pipeline había salido bien. El README defendía la consecuencia como rigor, con estas palabras: <b style=\"color:#141210\">\"o la alerta está razonada por el LLM o no sale\".</b> El argumento es coherente. También ponía al modelo en el camino crítico de la notificación &mdash; y eso nadie lo costeó, porque en el hardware del documento de diseño el modelo contesta en segundos.",
+  k72: "En el hardware que existe, una consulta tardó <b style=\"color:#141210\">9 minutos</b>. Con rondas de 15, un corte de tres minutos se estaba reportando hasta <b style=\"color:#141210\">media hora tarde</b>. Eso no es una alerta razonada, es un obituario. La decisión era correcta sobre lo que optimizaba y equivocada sobre lo que importaba.",
+  k78: "Negarse de plano",
+  k79: "detectar &rarr; razonar &rarr; notificar",
+  k80: "<b style=\"color:#141210\">Compra:</b> todo mensaje que llega fue razonado. Nada a medio hacer llega a una persona, ni a una capa de acción río abajo.<br><br><b style=\"color:#141210\">Gasta:</b> la notificación misma. Un modelo lento la demora; uno inalcanzable la retiene entera. Y la falla es invisible desde afuera &mdash; un canal callado es también lo que parece un día tranquilo.",
+  k81: "Partir las garantías",
+  k82: "alerta &rarr; avanzar baseline &rarr; investigar &rarr; informe",
+  k83: "<b style=\"color:#141210\">La fase 1 es load-bearing.</b> Hechos crudos, sin modelo, segundos. La baseline avanza <i>acá</i>: si la entrega falla no avanza, y la ronda siguiente reintenta.<br><br><b style=\"color:#141210\">La fase 2 es best-effort.</b> Si la investigación se rompe, sale un mensaje corto diciéndolo. Nunca en silencio, nunca reteniendo la alerta.",
+  k84: "<b>La regla ya estaba escrita.</b> <i>Se degrada el enriquecimiento, nunca la entrega</i> estaba en las notas de diseño desde el principio. La v2 no es un principio nuevo &mdash; es el punto en el que el código empezó a obedecer uno que ya venía enunciando. Esa brecha es la forma habitual en que esto falla: la política está en la prosa, el orden está en el código, y nada chequea que coincidan.",
+  k85: "<b>Lo que un fallback sigue sin poder hacer:</b> degradar <i>y</i> callárselo. Una alerta cruda mandada sin marcar es indistinguible de una razonada, y el canal empeora en silencio. Que falle la fase 2 produce un mensaje que dice que la investigación falló &mdash; porque \"se rompió\" y \"no encontró nada\" piden respuestas distintas de quien lee.",
   k59: "Fundamentado en <code>sentinel/analyzer.py</code>, <code>sentinel/cli.py</code> y <code>sentinel/watchdog.py</code> — semántica de no-fallback y snapshots limitados al diff, tal como está en producción."
 };
 const EN_SNAP = {};
