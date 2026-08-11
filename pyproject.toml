@@ -1,7 +1,7 @@
 [project]
 name = "infra-sentinel"
-version = "1.0.0"
-description = "LLM-in-the-loop infrastructure watchdog: polls Zabbix + Prometheus and, only on new events, asks a self-hosted LLM to reason and alert."
+version = "2.0.0"
+description = "LLM-in-the-loop infrastructure watchdog: polls Zabbix + Prometheus, alerts in seconds from raw facts, then investigates with a self-hosted LLM. The model is never on the critical path of the notification."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -13,6 +13,7 @@ dev = ["pytest>=8", "ruff>=0.6"]
 
 [project.scripts]
 sentinel = "sentinel.cli:main"
+sentinel-deadman = "sentinel.deadman:main"
 
 [tool.setuptools.packages.find]
 include = ["sentinel*"]

@@ -39,14 +39,55 @@ Persistent=true
 WantedBy=timers.target
 ```
 
+> **On the interval.** With the event window (v2) a skipped round is covered by the next one,
+> because the window stretches back to the last round that actually finished. `Type=oneshot`
+> plus a timer will not start a run while the previous one is still going, which used to mean
+> a slow round silently lost whatever happened during it. That is why this can now run at
+> 5 minutes as easily as at 15.
+
+## `sentinel-deadman.service` and `.timer`
+
+The cycle cannot report its own death. This is the unit that can, and **it has to be a
+separate unit** — sharing a process, a network path or a credential with the thing it watches
+means the two die together and the check only ever says everything is fine.
+
+```ini
+[Unit]
+Description=Sentinel - dead-man switch (is the cycle still running?)
+
+[Service]
+Type=oneshot
+User=sentinel
+WorkingDirectory=/opt/sentinel
+EnvironmentFile=/opt/sentinel/.env
+ExecStart=/usr/bin/python3 -m sentinel.deadman
+```
+
+```ini
+[Unit]
+Description=Sentinel - check the watchdog heartbeat every 10 minutes
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+Set `HEARTBEAT_MAX_AGE_SEC` comfortably **above** the cycle interval — equal to it means a
+single delayed round pages you, and a check that cries wolf gets muted, which is the same as
+not having it.
+
 ## Install
 
 ```bash
 sudo cp -r sentinel /opt/sentinel/sentinel
 sudo cp .env.example /opt/sentinel/.env    # then edit, chmod 600
-sudo cp docs/sentinel.service docs/sentinel.timer /etc/systemd/system/  # (extract the blocks above)
+sudo cp docs/sentinel*.service docs/sentinel*.timer /etc/systemd/system/  # (extract the blocks above)
 sudo systemctl daemon-reload
-sudo systemctl enable --now sentinel.timer
+sudo systemctl enable --now sentinel.timer sentinel-deadman.timer
 ```
 
 ## Operate

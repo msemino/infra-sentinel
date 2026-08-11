@@ -46,6 +46,20 @@ class Config:
     dedup_cooldown_sec: int
     mass_outage_threshold: int
 
+    # --- v2: event window ---
+    # How far back a window may ever reach. Covers a skipped round; caps the replay after a
+    # long outage so coming back up does not page you with a weekend of history.
+    event_window_max_sec: int
+
+    # --- v2: evidence layer ---
+    evidence_window_sec: int   # how much history around the event to look at
+    siblings_max_hosts: int    # ceilings that keep "check the neighbours" from becoming
+    siblings_max_items: int    # a sweep of the monitoring API on a large group
+
+    # --- v2: dead-man switch ---
+    heartbeat_file: str
+    heartbeat_max_age_sec: int
+
     # --- State ---
     state_file: str
 
@@ -66,5 +80,11 @@ class Config:
             inbox_path=_get("INBOX_PATH", "./data/inbox.jsonl"),
             dedup_cooldown_sec=int(_get("DEDUP_COOLDOWN_SEC", "60")),
             mass_outage_threshold=int(_get("MASS_OUTAGE_THRESHOLD", "8")),
+            event_window_max_sec=int(_get("EVENT_WINDOW_MAX_SEC", str(6 * 3600))),
+            evidence_window_sec=int(_get("EVIDENCE_WINDOW_SEC", "900")),
+            siblings_max_hosts=int(_get("SIBLINGS_MAX_HOSTS", "8")),
+            siblings_max_items=int(_get("SIBLINGS_MAX_ITEMS", "12")),
+            heartbeat_file=_get("HEARTBEAT_FILE", "./data/heartbeat.json"),
+            heartbeat_max_age_sec=int(_get("HEARTBEAT_MAX_AGE_SEC", "600")),
             state_file=_get("STATE_FILE", "./data/state.json"),
         )
