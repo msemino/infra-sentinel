@@ -1,27 +1,20 @@
-"""Core watchdog logic: diff two snapshots and apply the guardrails.
+"""Guardrail logic: diff two snapshots, apply the rules, size the event window.
 
-Everything in this module is a **pure function** of its inputs (no I/O, no clock
-reads except the ``now_ts`` you pass in). That is deliberate: it makes the
-dedup / cooldown / circuit-breaker / event-window behaviour trivial to unit-test,
-which is where most of the real value of this project lives.
+Everything here is a pure function of its inputs — no I/O, and no clock reads beyond the
+`now_ts` passed in — which is what makes the dedup, cooldown, breaker and exactly-once
+behaviour testable directly.
 
 Guardrails, in order:
 
-1. **Baseline seeding** — the first cycle records what is already broken and
-   raises nothing. You don't get paged for pre-existing problems on startup.
-2. **Diff vs baseline** — only the delta (new problems, recoveries) is a candidate
-   for alerting.
-3. **Dedup by trigger objectid + cooldown** — a flapping trigger emits a new
-   eventid every cycle. We key "have we already alerted?" on the stable objectid,
-   not the eventid, and suppress re-alerts within a cooldown window.
-4. **Mass-outage circuit breaker** — if a single cycle brings a flood of new
-   problems, we short-circuit to one terse message instead of asking the LLM per
-   event and spamming the operator.
-5. **Event window with exactly-once** (v2) — the active-problems query only sees
-   what is broken *right now*, so an incident that opens and closes between two
-   rounds is invisible even though the monitoring system recorded it perfectly.
-   The window query covers the gap; the windows deliberately overlap, and
-   ``alerted_eventids`` is what stops the overlap from alerting twice.
+1. **Baseline seeding** — the first cycle records what is already broken and raises nothing.
+2. **Diff vs baseline** — only the delta is a candidate for alerting.
+3. **Dedup by trigger objectid + cooldown** — a flapping trigger emits a new eventid every
+   cycle, so identity is keyed on the stable objectid.
+4. **Mass-outage breaker** — a flood in one cycle short-circuits to one terse message.
+5. **Event window with exactly-once** — the active-problems query only sees what is broken
+   now, so an incident that opens and closes between rounds is invisible to it. The window
+   query covers the gap, the windows overlap deliberately, and `alerted_eventids` is what
+   stops the overlap from alerting twice.
 """
 
 from __future__ import annotations

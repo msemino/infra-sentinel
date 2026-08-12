@@ -1,40 +1,23 @@
-"""The deterministic evidence layer — what gets collected *before* the model is called.
+"""Bounded read-only collection, run before the model is called.
 
-With nothing but "host + trigger name + last value", a language model can only say that
-something happened on a host. That is the sentence the operator already had.
-
-What made a good manual diagnosis good was never eloquence: it was four boring lookups
-anyone can do, and the model was never going to guess their answers. So they are done here,
-in code, and handed to the model as facts with timestamps. The model writes the paragraph
-and cross-references the runbook; it does not investigate.
-
-The four blocks, and what each one *licenses you to say*:
+Four blocks, roughly a tenth of a second, no model:
 
 ===================  ============================================================
-``history``          "it lasted 2m44s, six samples at 100% every 15 seconds"
-                     instead of "it was down for a while"
+``history``          samples of the trigger's item around the event, so duration
+                     and cadence can be stated rather than estimated
 ``correlated``       what else moved in the same window, on any host
-``siblings``         the reachability checks on the host's most specific group,
-                     **split into the ones that failed and the ones that did not**
-``why_no_trigger``   the expanded trigger expression and its priority — "a sample
-                     was missing" instead of "nobody told me"
+``siblings``         reachability checks on the host's most specific group, split
+                     into the ones that failed and the ones that did not
+``why_no_trigger``   the expanded trigger expression and its priority
 ===================  ============================================================
 
-The third one is the one worth arguing for. "Wired and wireless went down together" points
-upstream. "HTTP kept answering while ICMP and DNS died" points at a protocol, not a link.
-**The checks that did not fail narrow the hypothesis as much as the ones that did** — and a
-collector that only gathers failures can never produce that second sentence.
+`siblings` is split rather than filtered because the checks that held carry as much
+information as the ones that failed: everything down together points upstream, while one
+protocol failing while another answers points at the protocol.
 
-Cost and blast radius:
-
-* The whole collection is four bounded read-only queries. It takes on the order of a tenth
-  of a second and needs no model, so it happens on every investigation rather than being
-  saved for the interesting ones.
-* ``max_hosts`` / ``max_items`` are what keep "check the host's siblings" from turning into
-  a sweep of the monitoring API on a large group.
-* Every block is in its own ``try``/``except``. A hiccup in one degrades the report by one
-  paragraph; it does not lose the investigation. The alert has already gone out regardless
-  (see :mod:`sentinel.cli`) — this layer can only ever make a report better or shorter.
+`max_hosts` / `max_items` bound the queries so a large host group cannot turn this into a
+sweep of the monitoring API. Each block is caught separately: a failure degrades the report by
+one paragraph and is named in it, never propagates.
 """
 
 from __future__ import annotations

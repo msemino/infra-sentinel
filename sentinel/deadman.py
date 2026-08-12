@@ -1,20 +1,11 @@
-"""Dead-man switch: who watches the watchdog.
+"""Dead-man switch: a separate unit that reports the cycle is not running.
 
-A watchdog cannot report its own death. Every guardrail in :mod:`sentinel.watchdog` is about
-not alerting too much; none of them can fire when the process stops running at all, and that
-failure is silent by construction — the operator sees a quiet channel, which is exactly what
-a healthy day also looks like.
+The cycle cannot report its own death, and the failure is silent — a quiet channel is also
+what a healthy day looks like. So the cycle writes a heartbeat and a different systemd timer
+reads it.
 
-So the main cycle leaves a heartbeat on disk, and a **separate** unit on its own timer reads
-it. The separation is the whole design:
-
-* it does not import the monitoring clients, so a monitoring outage cannot take it down;
-* it never calls the model, so a slow or missing model cannot delay it;
-* it runs on a different schedule, so a hung cycle cannot block it.
-
-It has one job and it can only do that job by not sharing anything with the thing it is
-watching. The moment it needs the same network, the same credentials or the same process,
-the two die together and it stops being a check.
+The separation is the design: this imports no monitoring client and never calls the model, so
+neither can take it down with the thing it is watching.
 """
 
 from __future__ import annotations

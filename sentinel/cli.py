@@ -1,32 +1,16 @@
-"""Entry point: run one watchdog cycle, in two phases.
+"""Entry point: one watchdog cycle, in two phases.
 
-    detect -> ALERT (seconds, no model) -> advance baseline -> investigate -> REPORT
+    detect -> ALERT (no model) -> advance baseline -> investigate -> REPORT
 
-v1 ran ``detect -> reason -> notify`` and persisted state only after the whole pipeline
-succeeded. That gave a clean retry guarantee and one property nobody had priced: **the model
-sat on the critical path of the notification.** A slow model delayed the alert; an
-unreachable one withheld it. The README argued for that as a feature — an alert is either
-reasoned or it does not go out.
+Phase 1 is load-bearing: it sends raw facts without the model, and the baseline advances
+there. If delivery fails the baseline does not advance and the next round retries.
 
-Then it got measured. A single call to the local model took **9 minutes**. On a 15-minute
-round that is an alert arriving up to half an hour after a three-minute outage, which is not
-a reasoned alert, it is an obituary. The design decision was correct about what it optimised
-for and wrong about what mattered.
+Phase 2 is best-effort. Nothing above it waits for it, and a failure produces a short message
+saying the investigation failed rather than silence.
 
-So the phases now carry different guarantees, and the difference is the point:
-
-======  ==========================  ==================================================
-Phase   Message                     Guarantee
-======  ==========================  ==================================================
-1       ALERT — raw facts           **Load-bearing.** No model. The baseline advances
-                                    *here*: if delivery fails, it does not advance and
-                                    the next round retries. Nothing is lost.
-2       REPORT — the investigation  **Best-effort.** If it fails, a short message says
-                                    so. Never silent, never holds the alert back.
-======  ==========================  ==================================================
-
-The policy was in the design notes all along — *degrade the enrichment, never the delivery*.
-v2 is where it became true of the code rather than of the prose.
+Wiring only — the decisions live in `watchdog` (guardrails, event window), `evidence`
+(collection) and `verdict` (synthesis). The README explains why the phases are ordered this
+way; this module only has to keep them ordered.
 """
 
 from __future__ import annotations

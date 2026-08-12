@@ -9,10 +9,8 @@ wired together:
 So this boots the three mocks as separate processes on ephemeral ports and drives real
 cycles. Nothing is stubbed in-process — if the wiring is wrong, these fail.
 
-The scenario that matters is `test_alert_survives_a_broken_model`. In v1 the equivalent case
-produced **no message at all**: the analyzer raised, the cycle aborted, state was not
-advanced. That was a deliberate design decision, defended in the v1 README. Here the same
-failure must still produce the alert, followed by a short note that the enrichment is missing.
+The scenario that matters is `test_alert_survives_a_broken_model`: the same failure must
+still produce the alert, followed by a short note that the enrichment is missing.
 """
 
 from __future__ import annotations

@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Infra-Sentinel — a design decision, reversed by a measurement</title>
-<meta name="description" content="I wrote down why the alert waits for the model. Then one call took 9 minutes and a three-minute outage was reported half an hour late. v2 splits the cycle: the alert never waits, the investigation follows.">
-<meta property="og:title" content="Infra-Sentinel — a design decision, reversed by a measurement">
-<meta property="og:description" content="v1 refused to alert unless the model had reasoned first — argued for in writing. Then it got measured: 9 minutes per call. v2 makes the alert load-bearing and the investigation best-effort.">
+<title>Infra-Sentinel — two-phase alerting for an LLM-in-the-loop watchdog</title>
+<meta name="description" content="Polls Zabbix and Prometheus, alerts in seconds from raw facts, then investigates and follows up. Event window with exactly-once delivery, a deterministic evidence layer before the prompt, and a dead-man switch on its own timer.">
+<meta property="og:title" content="Infra-Sentinel — two-phase alerting for an LLM-in-the-loop watchdog">
+<meta property="og:description" content="The alert is load-bearing and carries no model call; the investigation is best-effort and nothing waits for it. Plus an event window that catches incidents opening and closing between rounds.">
 <meta property="og:type" content="website">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -230,14 +230,16 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 
 <meta property="og:url" content="https://infra-sentinel.vercel.app">
 <meta property="og:image" content="https://infra-sentinel.vercel.app/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Infra-Sentinel — a design decision, reversed by a measurement">
-<meta name="twitter:description" content="v1 refused to alert unless the model had reasoned first — argued for in writing. Then it got measured: 9 minutes per call. v2 makes the alert load-bearing and the investigation best-effort.">
+<meta name="twitter:title" content="Infra-Sentinel — two-phase alerting for an LLM-in-the-loop watchdog">
+<meta name="twitter:description" content="The alert is load-bearing and carries no model call; the investigation is best-effort and nothing waits for it. Plus an event window that catches incidents opening and closing between…">
 <meta name="twitter:image" content="https://infra-sentinel.vercel.app/og.png">
 </head>
 <body>
@@ -260,8 +262,8 @@
 </div></nav>
 
 <header><div class="wrap">
-  <div class="kicker" data-i18n="k3"><span class="b"></span>LLM-IN-THE-LOOP · SELF-HOSTED · A DESIGN DECISION, REVERSED BY A MEASUREMENT</div>
-  <h1 data-i18n="k1">I wrote down why the alert <span class="grad">waits for the model</span>.<br>Then I measured it.</h1>
+  <div class="kicker" data-i18n="k3"><span class="b"></span>LLM-IN-THE-LOOP · SELF-HOSTED · TWO-PHASE ALERTING</div>
+  <h1 data-i18n="k1">The alert goes out <span class="grad">in seconds</span>.<br>The investigation follows.</h1>
   <p class="sub" data-i18n="k2">Infra-Sentinel polls Zabbix and Prometheus with cheap, constant checks and calls a <b>self-hosted model</b> only on real news. v1 refused to alert unless the model had reasoned about it — argued for in writing, as rigour. Then one call took <b>9 minutes</b>, and a three-minute outage got reported half an hour late. v2 splits the cycle in two: <b>the alert never waits for the model</b>, the investigation follows.</p>
   <div class="hero-cta">
     <a class="btn primary" href="#degrada" data-i18n="k8">▸ What the measurement changed</a>
@@ -270,7 +272,8 @@
   </div>
 
   <div class="metrics">
-    <div class="metric"><div class="big c-red">9m00s <span style="font-size:.6em">measured</span></div><div class="lbl" data-i18n="k4">one model call, on the hardware that exists — the number that reversed the design</div></div>
+    <!-- source: production incident log; not reproducible in this repository. See "The reversal". -->
+    <div class="metric"><div class="big c-red">9m00s</div><div class="lbl" data-i18n="k4">one model call on CPU, from the production incident log &mdash; not reproducible in this repo</div></div>
     <div class="metric"><div class="big c-violet">2 <span style="font-size:.6em">phases</span></div><div class="lbl" data-i18n="k5">alert without the model, report after it</div></div>
     <div class="metric"><div class="big c-teal">~0.1s <span style="font-size:.6em">evidence</span></div><div class="lbl" data-i18n="k6">four bounded queries, no model, before the prompt</div></div>
     <div class="metric"><div class="big c-green">0 <span style="font-size:.6em">calls/hr</span></div><div class="lbl" data-i18n="k7">steady state: the model is never touched</div></div>
@@ -392,7 +395,7 @@
   <div class="eyebrow">The reversal</div>
   <h2 data-i18n="k70">I argued for it in writing. Then a number took it apart.</h2>
   <p class="lead" data-i18n="k71">v1 ran <code>detect &rarr; reason &rarr; notify</code> and only advanced its baseline once the whole pipeline had succeeded. The README defended the consequence as rigour, in these words: <b style="color:#141210">"an operator alert is either LLM-reasoned or it doesn't go out."</b> That argument is coherent. It also put the model on the critical path of the notification &mdash; and nobody priced that, because on the hardware in the design document the model answers in seconds.</p>
-  <p class="lead" style="margin-top:14px" data-i18n="k72">On the hardware that exists, one call took <b style="color:#141210">9 minutes</b>. With 15-minute rounds, a three-minute outage was being reported up to <b style="color:#141210">half an hour late</b>. That is not a reasoned alert; it is an obituary. The decision was right about what it optimised for and wrong about what mattered.</p>
+  <p class="lead" style="margin-top:14px" data-i18n="k72">On the hardware that exists, one call took <b style="color:#141210">9 minutes</b>. With 15-minute rounds, a three-minute outage was being reported up to <b style="color:#141210">half an hour late</b>. The decision was right about what it optimised for and wrong about what mattered.</p>
   <div class="compare" style="margin-top:30px">
     <div class="vcard"><div class="vh"><span class="vbadge v1">v1</span><span class="vt" data-i18n="k78">Refuse outright</span></div><div class="vs" data-i18n="k79">detect &rarr; reason &rarr; notify</div><div class="vbody" data-i18n="k80"><b style="color:#141210">Buys:</b> every message that arrives has been reasoned about. Nothing half-finished reaches a human, or a downstream action layer.<br><br><b style="color:#141210">Spends:</b> the notification itself. A slow model delays it; an unreachable one withholds it entirely. The failure is invisible from the outside &mdash; a silent channel is also what a healthy day looks like.</div></div>
     <div class="vcard hl"><div class="vh"><span class="vbadge v2">v2</span><span class="vt" data-i18n="k81">Split the guarantees</span></div><div class="vs" data-i18n="k82">alert &rarr; advance baseline &rarr; investigate &rarr; report</div><div class="vbody" data-i18n="k83"><b style="color:#141210">Phase 1 is load-bearing.</b> Raw facts, no model, seconds. The baseline advances <i>here</i>: if delivery fails it does not advance, and the next round retries.<br><br><b style="color:#141210">Phase 2 is best-effort.</b> If the investigation breaks, a short message says so. Never silent, never holding the alert back.</div></div>
@@ -476,8 +479,8 @@ notify(alert)</pre>
 
   <div class="callout" style="margin-top:34px">
     <h3 style="margin:0 0 10px" data-i18n="k55">The trade-off, stated plainly</h3>
-    <p data-i18n="k56">The scarcity that keeps the model idle is also the scarcity of what the system sees. The LLM never watches raw metrics or the full monitoring state — it only ever reasons over the small diff the pollers already flagged as new. If a problem doesn't surface as a change in Zabbix or Prometheus, it never reaches the model at all. Detection is the ceiling on reasoning, not the other way around.</p>
-    <p data-i18n="k57">This page used to say that when the model does not answer, Sentinel goes quiet &mdash; no fallback, the cycle aborts, the event is retried rather than shipped un-reasoned. That was true, it was defended as correctness, and it meant <b style="color:#141210">a model outage and an uneventful night looked identical to the operator: both were silence</b>. v2 splits the difference the only way that does not lie: the alert goes out from raw facts and does not wait, and a failed investigation produces a message saying the investigation failed. Degraded, and <i>marked</i> as degraded.</p>
+    <p data-i18n="k56">The scarcity that keeps the model idle is also the scarcity of what the system sees. The LLM never watches raw metrics or the full monitoring state — it only ever reasons over the small diff the pollers already flagged as new. If a problem doesn't surface as a change in Zabbix or Prometheus, it never reaches the model at all.</p>
+    <p data-i18n="k57">When the model does not answer, the alert has already gone out and the follow-up says the investigation failed. That distinction is load-bearing: <b>a model outage and an uneventful night must not look the same to the operator</b>, and under an ordering where the notification waits for the model, both are silence.</p>
     <p data-i18n="k58">Which is also why rung 3 of the roadmap — acting, not just recommending — stays a human-in-the-loop design on purpose. A model that reasons well over a diff is not the model you hand the keys to production infrastructure, and this repo doesn't pretend otherwise.</p>
   </div>
   <p class="sub" style="font-size:13px;opacity:.65;margin-top:22px" data-i18n="k59">Grounded in <code>sentinel/analyzer.py</code>, <code>sentinel/cli.py</code> and <code>sentinel/watchdog.py</code> — no-fallback retry semantics and diff-only snapshots, as shipped.</p>
@@ -540,10 +543,10 @@ const S_ES = {
 };
 let LANG = "en", CUR = "quiet";
 const ES = {
-  k1: "Escribí por qué la alerta <span class='grad'>espera al modelo</span>.<br>Después lo medí.",
+  k1: "La alerta sale <span class='grad'>en segundos</span>.<br>La investigaci\u00f3n va despu\u00e9s.",
   k2: "Infra-Sentinel consulta Zabbix y Prometheus con chequeos baratos y constantes, y llama a un <b>modelo self-hosted</b> solo cuando hay novedad real. La v1 se negaba a avisar si el modelo no había razonado antes — argumentado por escrito, como rigor. Después una consulta tardó <b>9 minutos</b>, y un corte de tres minutos se reportó media hora tarde. La v2 parte el ciclo en dos: <b>la alerta no espera al modelo</b>, la investigación va después.",
-  k3: "<span class='b'></span>LLM-IN-THE-LOOP · SELF-HOSTED · UNA DECISIÓN DE DISEÑO, REVERTIDA POR UNA MEDICIÓN",
-  k4: "una consulta al modelo, en el hardware que existe — el número que revirtió el diseño",
+  k3: "<span class='b'></span>LLM-IN-THE-LOOP · SELF-HOSTED · ALERTA EN DOS FASES",
+  k4: "una consulta al modelo en CPU, del registro de incidentes de producci\u00f3n &mdash; no reproducible en este repo",
   k5: "alerta sin el modelo, informe después",
   k6: "cuatro consultas acotadas, sin modelo, antes del prompt",
   k7: "régimen estable: al modelo no se lo toca",
@@ -598,11 +601,11 @@ const ES = {
   k54: "Todos los proyectos",
   k55: "El trade-off, sin vueltas",
   k56: "La escasez que mantiene al modelo en reposo es también la escasez de lo que el sistema ve. El modelo nunca mira las métricas crudas ni el estado completo del monitoreo &mdash; razona solo sobre el pequeño diff que los pollers ya marcaron como nuevo. Si un problema no aparece como un cambio en Zabbix o Prometheus, nunca le llega. La detección es el techo del razonamiento, no al revés.",
-  k57: "Esta página decía que cuando el modelo no contesta, Sentinel se queda callado &mdash; sin fallback, el ciclo aborta y el evento se reintenta en vez de salir sin razonar. Era cierto, se defendía como corrección, y significaba que <b style=\"color:#141210\">una caída del modelo y una noche tranquila se veían iguales para el operador: las dos eran silencio</b>. La v2 parte la diferencia de la única forma que no miente: la alerta sale con hechos crudos y no espera, y una investigación fallida produce un mensaje que dice que la investigación falló. Degradado, y <i>marcado</i> como degradado.",
+  k57: "Cuando el modelo no contesta, la alerta ya sali\u00f3 y el mensaje siguiente dice que la investigaci\u00f3n fall\u00f3. Esa distinci\u00f3n es load-bearing: <b>una ca\u00edda del modelo y una noche tranquila no pueden verse iguales para el operador</b>, y bajo un orden donde la notificaci\u00f3n espera al modelo, las dos son silencio.",
   k58: "Por eso también el escalón 3 del roadmap — actuar, no solo recomendar — sigue siendo, a propósito, un diseño con humano en el loop. Un modelo que razona bien sobre un diff no es el modelo al que le das las llaves de la infraestructura de producción, y este repo no pretende lo contrario.",
   k70: "Lo argumenté por escrito. Después un número lo desarmó.",
   k71: "La v1 corría <code>detectar &rarr; razonar &rarr; notificar</code> y solo avanzaba la baseline cuando todo el pipeline había salido bien. El README defendía la consecuencia como rigor, con estas palabras: <b style=\"color:#141210\">\"o la alerta está razonada por el LLM o no sale\".</b> El argumento es coherente. También ponía al modelo en el camino crítico de la notificación &mdash; y eso nadie lo costeó, porque en el hardware del documento de diseño el modelo contesta en segundos.",
-  k72: "En el hardware que existe, una consulta tardó <b style=\"color:#141210\">9 minutos</b>. Con rondas de 15, un corte de tres minutos se estaba reportando hasta <b style=\"color:#141210\">media hora tarde</b>. Eso no es una alerta razonada, es un obituario. La decisión era correcta sobre lo que optimizaba y equivocada sobre lo que importaba.",
+  k72: "En el hardware que existe, una consulta tardó <b style=\"color:#141210\">9 minutos</b>. Con rondas de 15, un corte de tres minutos se estaba reportando hasta <b style=\"color:#141210\">media hora tarde</b>. La decisión era correcta sobre lo que optimizaba y equivocada sobre lo que importaba.",
   k78: "Negarse de plano",
   k79: "detectar &rarr; razonar &rarr; notificar",
   k80: "<b style=\"color:#141210\">Compra:</b> todo mensaje que llega fue razonado. Nada a medio hacer llega a una persona, ni a una capa de acción río abajo.<br><br><b style=\"color:#141210\">Gasta:</b> la notificación misma. Un modelo lento la demora; uno inalcanzable la retiene entera. Y la falla es invisible desde afuera &mdash; un canal callado es también lo que parece un día tranquilo.",

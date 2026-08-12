@@ -1,25 +1,11 @@
-"""Derive the conclusion from the evidence, mechanically. No model involved.
+"""Derive the conclusions from the evidence. Deterministic, no model.
 
-The first real report this produced was about 3200 characters: the four evidence blocks
-dumped raw, twenty-odd lines of samples. The feedback was "nobody reads all that", and it
-was correct — an alert that is not read has not alerted, which makes the entire collection
-step worthless.
+Every line emitted is arithmetic or a set comparison over measured facts. When the evidence
+supports nothing, nothing is emitted — there is no default conclusion, because a confident
+sentence with nothing behind it is worse than a short report.
 
-The instinct is to call that a formatting problem and shorten it. It was not. It was a
-**division of labour** problem: the code gathered the raw material and left the synthesis to
-somebody else — the operator reading at 3 AM, or the model. The model did it badly, which is
-the expected outcome: it was being asked to re-derive arithmetic it had been handed.
-
-The conclusions are mechanically derivable from the same four blocks. So they are derived
-here, deterministically, and the model gets them as input instead of as homework. Same
-evidence, one paragraph, and the two sentences that had to be written by hand that day now
-come out on their own.
-
-What this deliberately does **not** do is guess. Every line below is arithmetic or a set
-comparison over facts that were measured. When the evidence does not support a statement,
-the statement is absent — there is no default conclusion to fall back on, because a
-confident sentence with nothing behind it is exactly the failure this project exists to
-avoid.
+The model receives this as input rather than as a task: re-deriving arithmetic it has already
+been handed is where a small model reliably goes wrong.
 """
 
 from __future__ import annotations

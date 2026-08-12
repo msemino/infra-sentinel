@@ -135,11 +135,19 @@ The argument is coherent. It also put the model on the critical path of the noti
 nobody had priced that, because on the hardware in the design document the model answers in
 seconds.
 
-**Then it got measured.** One call to the local model took **9 minutes**. On a 15-minute
-round, that is an alert arriving up to half an hour after a three-minute outage. Not a
-reasoned alert — an obituary. The decision was right about what it optimised for and wrong
-about what mattered: an operator would rather know something broke and get the analysis two
-minutes later than get a beautifully argued paragraph about an outage that has already ended.
+Then it got measured. On the deployment this repository is the sanitized version of, one call
+to the local model — a 30B MoE running CPU-only — took **9 minutes**. On a 15-minute round
+that is an alert arriving up to half an hour after a three-minute outage. The decision was
+right about what it optimised for and wrong about what mattered: an operator would rather know
+something broke and get the analysis two minutes later than get a well-argued paragraph about
+an outage that has already ended.
+
+> **Where that number comes from.** It is from the incident log of the production system, not
+> from this repository, and **nothing here reproduces it** — there is no timing artefact in
+> `runs/` and this README will not pretend otherwise. What is reproducible here is the
+> consequence: `tests/test_e2e_two_phase.py` stalls the model by 30 s and asserts the alert
+> goes out anyway. The architecture does not depend on the exact figure, only on the model
+> being slow enough to matter, which on CPU it reliably is.
 
 So the ordering changed, and the two phases now carry different guarantees:
 

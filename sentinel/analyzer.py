@@ -1,20 +1,10 @@
-"""LLM analysis via a self-hosted Ollama endpoint — phase 2 only.
+"""Phase 2 write-up via a self-hosted Ollama endpoint.
 
-**This is best-effort work and nothing waits for it.** The alert has already been delivered
-by the time anything here runs (see :mod:`sentinel.cli`), so a slow, broken or missing model
-costs the operator a paragraph of context, never a notification and never a delay.
+Best-effort by construction: the alert has already been delivered before anything here runs,
+so a slow or unreachable model costs a paragraph of context, never a notification.
 
-That is a reversal of how v1 worked, and it was a measurement that reversed it — see the
-README section "What changed in v2, and why". The short version: when the model lives on
-whatever hardware you actually have rather than on the hardware in the design document, a
-single call can take minutes, and an ordering of `detect -> reason -> notify` turns that
-latency into late alerts.
-
-The model is also no longer asked to investigate. :mod:`sentinel.evidence` collects the facts
-and :mod:`sentinel.verdict` derives the conclusions, both deterministically and in about a
-tenth of a second. What arrives here is evidence plus an already-derived verdict, and the job
-is to write it up and cross-reference the runbook — not to re-derive arithmetic it was
-handed.
+The model is not asked to investigate. `evidence` collects the facts and `verdict` derives the
+conclusions; this passes both in and asks for prose plus impact and a first thing to check.
 """
 
 from __future__ import annotations

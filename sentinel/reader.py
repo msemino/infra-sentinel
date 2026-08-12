@@ -1,8 +1,7 @@
-"""The concrete :class:`sentinel.evidence.Reader` — four read-only queries, all bounded.
+"""The concrete `evidence.Reader`: four read-only Zabbix queries, all bounded.
 
-Nothing here writes. Every method takes a ceiling from the caller and applies it *before*
-asking, not after: the point of a limit is to bound the query, and a limit applied to the
-answer has already cost you the sweep it was supposed to prevent.
+Nothing here writes. Ceilings are applied to the query rather than to the result — a limit
+applied after the fact has already paid for the sweep it was meant to prevent.
 """
 
 from __future__ import annotations

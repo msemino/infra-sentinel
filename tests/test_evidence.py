@@ -9,8 +9,7 @@ and "the neighbours were fine" are opposite findings.
 
 **That the verdict is derived, not guessed.** Every line it emits has to be arithmetic or a
 set comparison over measured facts, and when the evidence supports nothing it has to say
-nothing. There is no default conclusion, because a confident sentence with nothing behind it
-is the exact failure this project was written after.
+nothing. There is no default conclusion to fall back on.
 """
 
 from __future__ import annotations
