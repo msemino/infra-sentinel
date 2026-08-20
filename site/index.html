@@ -490,7 +490,7 @@ notify(alert)</pre>
   <div style="font-family:var(--mono);color:var(--mut);font-size:14px;margin-bottom:6px">Infra-Sentinel — quiet by design, useful on purpose.</div>
   <div style="font-size:13.5px;max-width:560px;margin:0 auto 18px">Cheap constant detection, rare local reasoning, and — increasingly — the exact fix. MIT-licensed and self-hostable.</div>
   <a class="btn primary" href="https://github.com/msemino/infra-sentinel" target="_blank" rel="noopener">View on GitHub ↗</a>
-  <div style="margin-top:26px;font-size:12px;color:var(--dim)">Marcelo Semino · AI Systems &amp; Automation Architect · MIT</div>
+  <div style="margin-top:26px;font-size:12px;color:var(--dim)">Marcelo Semino · <span class="rol">AI Platform Engineer · AIOps · Agentic AI · LLM / RAG</span> · MIT</div>
 </div></footer>
 
 <script>
@@ -679,5 +679,29 @@ let _l=_q.get("lang");
 if(!_l){ try{ _l=localStorage.getItem("lang"); }catch(e){} }
 setLang(_l==="es"?"es":"en");
 </script>
+<!-- rol+analytics: generado por settitle.py, no editar a mano -->
+<script>
+(function(){
+  var R={"_def":{"en":"AI Platform Engineer · AIOps · Agentic AI · LLM / RAG","es":"AI Platform Engineer · AIOps · IA Agéntica · LLM / RAG"},"aiops":{"en":"Enterprise GenAI Operations · Agents · Context · Observability & Governance","es":"Operación de GenAI empresarial · Agentes · Contexto · Observabilidad y gobierno"},"platform":{"en":"AI Platform Engineer · MCP · On-prem inference · Observability","es":"AI Platform Engineer · MCP · Inferencia on-premise · Observabilidad"},"llm":{"en":"LLM / RAG Engineer · Local inference · Evaluation & cost","es":"Ingeniero LLM / RAG · Inferencia local · Evaluación y costo"},"arch":{"en":"AI Solutions Architect · Self-hosted LLM platforms · Agentic systems","es":"Arquitecto de soluciones de IA · Plataformas LLM self-hosted · Sistemas agénticos"}};
+  function pintarRol(){
+    var k=null;
+    try{ k=new URLSearchParams(location.search).get('rol'); }catch(e){}
+    var v=(k&&R[k])||R._def;
+    var l=(document.documentElement.lang==='es')?'es':'en';
+    var n=document.querySelectorAll('.rol');
+    for(var i=0;i<n.length;i++){ n[i].textContent=v[l]||v.en; }
+  }
+  // El i18n reescribe innerHTML al cambiar de idioma y se lleva puesto el span, asi que
+  // hay que repintar despues. Envolver setLang es el mismo truco que ya usa insight-rag.
+  if(typeof setLang==='function'){ var _o=setLang; setLang=function(l){ _o(l); pintarRol(); }; }
+  // Cinturon y tiradores: si setLang no fuera global en alguna pagina, el click igual repinta.
+  var b=document.querySelectorAll('.lang-btn');
+  for(var j=0;j<b.length;j++){ b[j].addEventListener('click',function(){ setTimeout(pintarRol,0); }); }
+  pintarRol();
+})();
+</script>
+<script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments)};</script>
+<script defer src="/_vercel/insights/script.js"></script>
+<!-- /rol+analytics -->
 </body>
 </html>
